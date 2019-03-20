@@ -1,0 +1,112 @@
+! choose hybrid mode
+#define hybrid
+
+! Precision of Real Numbers
+! default:
+#define drk 8
+! Particles:
+#define prk 4
+
+! box dimensions
+! processors in each space directions
+#define pex 4 
+#define pey 4
+#define pez 2
+! grid points per processor (power of two in each direction highly recommended)
+! nz must be power of two, nx and should be powers of two for multigrid
+! if nz=1 set pez=1 (2D case)
+#define nx 16 
+#define ny 16   
+#define nz 32 
+! box dimensions -- Make sure to have these as real numbers for me=0. runs
+#define lx 25.6
+#define ly 25.6
+#define lz 25.6  
+
+! physical and numerical parameters
+!#define ELM
+#define d_e2 0.000
+#define gam 5./3
+#define dt 0.01
+#define substeps 4
+#define boundary_condition periodic
+#define diagout 1.0 
+#define nu  0.00
+#define chi 0.00
+#define eta 0.00
+#define n_base 0. 
+#define b0x 0.00000
+#define b0y 0.00000 
+#define b0z 1.00000
+#define bpert 0.2
+#define vpert 0.2
+
+! movie diagnostics
+#define movie_header "movie4b.h" 
+#define movie_header_full "movie4bfull.h" 
+#define movieout 4.99999
+#define movieout_full 4.9999999 
+!!#define USE_SIMPLE_IO
+#define double_precision
+#define take_dump 99.999999
+!#define double_byte
+
+! other definitions
+#define head 'p3d'
+#define bufsize 200000
+#define maxparticles 4096000 
+#define nchannels pex
+#define maxruntime 9999999
+
+! initialization
+#define init_scheme initOTV3D
+! Number of wave modes in the box - For Alfven wave
+!#define nummodes 1
+!#define waveamp 0.1
+#define ppg 100
+#define T_e 0.00
+#define isothermal
+!#define NO_ELEC_PHYS
+#define T_i 0.25
+#define w0 0.5
+#define psi0 0.0
+#define n_0 1.0
+
+! multigrid parameters
+#define nu1 4
+#define nu2 4
+#define nu3 4 
+#define maxiter 1000
+#define eps 1e-5
+#define norm_res
+#define mgverbose
+!#define mgverbose2
+#define alt_restrict_prolong
+#define miniter 3
+#define fixiter 2
+#define GS_LEX
+!#define WCYCLE
+! incompressibility condition for electrons
+!#define incompressible_electrons
+! domain for post processing
+#define pexv 1
+#define peyv 1
+#define pezv 1
+#define nxv 512
+#define nyv 512
+#define nzv 1
+
+! Driving flags
+!#define DRIVE_B
+!#define alpha_drb 0.50 
+!#define FOUROMEGA 0.057
+!#define DRIVE_V
+!#define alpha_drv 1.0
+
+!EXPANSION Flags
+!#define EXPANSION
+!#define ACCELERATED_EXPANSION
+!uncomment the following parameters if 
+!not accelerating box
+!#define uu0 0.001
+!#define usw0 1000

@@ -1,0 +1,248 @@
+#!/bin/csh
+
+#PBS -q debug
+#PBS -l mppwidth=64
+#PBS -l walltime=30:00
+#PBS -e log218.$PBS_JOBID
+#PBS -N run218
+#PBS -j eo
+
+set echo
+
+set DR = $HOME/P3D
+set RN = 218
+set PAR = reconn   # paramfile = param_$PAR
+set SVDIR = 'rn218.p113F'
+set PROCS = 64
+set NSTEPS = 300  
+     # The number of code steps to take in each run of p3d. Choices are:
+     #   Single number: Like NSTEPS = 20
+     #   Set of Numbers: Like NSTEPS={20,5,10}
+     # If NRUNS = more than number of elements of
+     #   NSTEPS, it repeats the last one.
+
+set NRUNS = 1  # How many time reloop NSTEPS.
+              # To run only once, set NRUNS = 1
+              # Setting NRUNS = 0 is the same as NRUNS = 1.
+
+#set RESTART    # Comment this out to start from scratch.
+              # If you restart, you currently have to copy the
+              # dumpfiles by hand.
+
+set FILENO = 0  # Dump file number to start code with
+set TASKS_PER_NODE = 2
+
+#set DMPDIR = 'rn421.p37E/dumpfiles'
+#set DMPFILES = 'pfdmp_1_421.d*'
+
+set PROGNAME = 'p3d'
+
+########## END OF USER MODIFIED VARIABLES  ####################
+###############################################################
+
+##########  Various initial things #####################
+
+set DR = ${DR}/run${RN}
+
+# Set VERSION equal efree<version num> using the tar file.
+cd $DR ; set VERSION = ${PROGNAME}??.tar ; set VERSION = $VERSION:r ; cd ..
+
+
+# Suggested by J. Carter at NERSC.  It eliminates the confusion
+# between the MPI I/O routines and the multigrid that would
+# otherwise lead to a slowdown.
+setenv MP_CSS_INTERRUPT OFF
+
+# Suggested by NERSC.  Eliminates a potential problem with the
+# Fortran routine random_number.
+setenv XLFRTEOPTS "intrinthds=16"
+
+# Suggested by Jonathan Carter.  Can vary between 1000 and 400000; the larger
+# is the default but smaller is better for small messages.  Has a small ---
+# one percent --- effect on the code.
+# setenv MP_ACK_INTERVAL 40000
+
+# Set for franklin at the recommendation of consult staff
+ setenv MPICH_UNEX_BUFFER_SIZE 120000000
+
+# Unalias commands like rm, cp, mv used in this script so that they
+# are not asked for a prompt to destroy files
+
+unalias rm ; unalias cp ; unalias mv
+
+
+########### Initialize RUN ####################
+
+if ($1 == 'init') then
+
+echo $0
+
+  ########## Make a scratch directory. Checks to make sure that
+  ########## a scratch directoy does not already exist.
+  unset echo
+  @ NUM = 1
+  set WORKDIR = $SCRATCH'/run'$RN.$NUM
+
+  while (! $?FIN )
+     if (-e $WORKDIR) then
+        @ NUM++
+        set WORKDIR = $SCRATCH'/run'$RN.$NUM
+     else
+        set FIN
+     endif
+  end
+
+  set echo
+  echo $WORKDIR > $DR/pwd.$RN
+  mkdir $WORKDIR
+
+
+  ########## Update tar file so it contains most recent files
+
+  cd $DR ; mkdir temp.$$
+  cd temp.$$ ; tar -xvf ../${VERSION}.tar ; cd ..
+  cp makefile param_$PAR ${PROGNAME}.run temp.$$/.
+  cd temp.$$ ; tar -cvf ../${VERSION}.tar * ; cd ..
+  rm -fr temp.$$
+
+  ########## Copy files into scratch directory and compile
+
+  cd $WORKDIR ; mkdir compile
+  cp $DR/* . ; cp $DR/* compile/.
+
+  cd compile # Change to compile directory
+
+  # cp param file to simply "param" so cpp will include it.
+  cp param_$PAR param
+
+  # Untar program files
+  tar -xvf ${VERSION}.tar
+
+  # Figure out what kind of machine I'm running on.
+      #  This is for the IBM SP Seaborg
+      if ("`uname -s`" == 'AIX' ) set MACH = 'AIX'
+      # This is for franklin
+      if ("`uname -s`" == 'Linux' ) set MACH = 'Linux'
+
+  # Determine which initialization routine is being used.
+  set INITFILE = `awk '/^#define/ && / init_scheme / {print $3}' param`
+
+  # Make init program which outputs initial dump file.
+  make par=$PAR mach=$MACH initfile=$INITFILE init
+
+  # Make p3d
+  make par=$PAR mach=$MACH initfile=$INITFILE p3d
+  
+  cd $WORKDIR
+  cp compile/init compile/p3d . # copy executables from compile dir.
+
+  ########## If necessary, download dumpfiles.
+
+  if ($?DMPDIR) then     # Only get dump file if DMPDIR is defined
+
+     hsi "cd $DMPDIR ; get $DMPFILES"
+  endif  
+
+  exit 0
+
+endif
+
+##########  End of initialization ####################
+
+############################################################
+##########  Begin Run  #####################################
+
+if ( $1 == '') then
+
+echo $0
+  cd $DR
+  set WORKDIR = `cat pwd.$RN`
+  cd $WORKDIR
+
+  echo '#################### RUNNING  PROGRAM ####################'
+
+  # Only run init to create an initial dump file if the run is not a
+  # restart. If the run is a restart, currently you must copy the
+  # restart dump files by hand and rename them to $FILENO.
+  if ($?RESTART == '0') then
+    /usr/bin/time -p aprun -n $PROCS -N 2 ./init
+  endif
+
+  touch p3d.stdout  # Make sure p3d.stdout file exists
+  if ($NRUNS == 0) set NRUNS = 1  # Make NRUNS = 1 if it is 0
+  @ ii = 1 ; @ FILENO_THIS_RUN = $FILENO
+  while ($ii <= $NRUNS)   # Step over the run steps
+    if ($ii > $#NSTEPS) then
+      set STEPS_THIS_RUN = $NSTEPS[$#NSTEPS]
+    else
+      set STEPS_THIS_RUN = $NSTEPS[$ii]
+    endif
+    echo '###############################################'
+    echo '######## STARTING STEP='${ii}'  STEPSIZE='${STEPS_THIS_RUN}'  ###########'
+    echo '######## STARTING WITH DUMP FILE NUMBER='${FILENO_THIS_RUN}' ###########'
+    echo '###############################################'
+
+    /usr/bin/time -p aprun -n $PROCS -N 2 ./p3d $FILENO_THIS_RUN $STEPS_THIS_RUN >> p3d.stdout
+
+  # Rename movie files so that they are compatible with Shay's idl codes.
+
+    unset echo  # Unset printout of looping over all the names
+    foreach movvar (bx by bz ex ey ez jx jy jz rho ni ne log jex jey jez \
+          jix jiy jiz pe pi n pixx piyy pizz pixz piyz pixy pexx peyy pezz\
+          pexz peyz pexy)
+      if ($NRUNS == 1) then  # if only running once then don't add step number to name
+        /bin/cp param_${PAR} movie.param_${RN}.in
+        if (-e $movvar) mv -f $movvar movie.${movvar}_${RN}.in
+        echo Changing from  $movvar to movie.${movvar}_${RN}.in
+      else
+        /bin/cp param_${PAR} movie.param_${RN}.in.${ii}
+        if (-e $movvar) mv -f $movvar movie.${movvar}_${RN}.in.${ii}       
+echo Changing from $movvar movie.${movvar}_${RN}.in.${ii}
+      endif
+    end # Foreach loop (movvar)
+    set echo
+
+    @ ii++ ; @ FILENO_THIS_RUN++
+  end  # While loop ($ii <= $NRUNS)
+
+  echo '#################### FINISHED PROGRAM ####################'
+
+  /bin/cp p3d.stdout $DR/p3d.stdout.$RN
+
+endif # if statement (if $1 = '')
+
+############################################################
+##########  Finish up run: Save files to Archive ###########
+
+if ($1 == 'fin') then
+
+  cd $DR
+  set WORKDIR = `cat pwd.$RN`
+  cd $WORKDIR
+
+  hsi "cd p3d ; mkdir $SVDIR ; cd $SVDIR ; mkdir dumpfiles"
+
+  set nonomatch
+  foreach fl (*.in)
+     echo "COMPRESSING $fl"
+     compress -c -f $fl > $fl.Z
+     echo "COMPRESSED $fl"
+  end
+
+  set lst = `ls p3d-001*` ; set ext = ($lst:ge) # Wordlist of dump extension numbers
+  shift ext # Get rid of lowest dumpfile number. Is an init or restart number.
+
+  foreach num ($ext)  # Save dumpfiles to dumpfile directory.
+    hsi "cd p3d/${SVDIR}/dumpfiles ; put p3d-???.${num}"
+  end
+
+  unset nonomatch
+
+  hsi "cd p3d/$SVDIR ; put *.in.Z makefile *.run *.stdout p3d*.tar param*"
+
+  cd $DR
+#   /bin/rm -fr $WORKDIR
+
+  exit
+
+endif   

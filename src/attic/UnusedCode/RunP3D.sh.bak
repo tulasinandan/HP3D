@@ -1,0 +1,219 @@
+#!/bin/bash
+
+#PBS -q regular
+#PBS -l mppwidth=64
+#PBS -l walltime=480:00
+#PBS -e log221.$PBS_JOBID
+#PBS -N run221
+#PBS -j eo
+
+
+export PROJ=OTV
+export DR=$HOME/P3D/$PROJ
+export RN=221
+export PAR=hybrid   # paramfile = param_$PAR
+export SVDIR='rn221'
+export PROCS=64
+export NSTEPS=10000
+export NRUNS=0  # How many time reloop NSTEPS. 
+               # To run only once, set NRUNS = 0
+
+#export RESTART=0 # Comment this out to start from scratch.
+               # If you restart, you currently have to copy the 
+               # dumpfiles by hand.
+
+
+export FILENO=1  # Dump file number to start code with
+export TASKS_PER_NODE=2
+
+#export DMPDIR = 'rn421.p37E/dumpfiles'
+#export DMPFILES = 'pfdmp_1_421.d*'
+
+export PROGNAME='p3d'
+
+########## END OF USER MODIFIED VARIABLES  ####################
+###############################################################
+
+##########  Various initial things #####################
+
+export DR=${DR}/run${RN}
+
+# export VERSION equal efree<version num> using the tar file. 
+#cd $DR ; export VERSION = ${PROGNAME}??.tar ; export VERSION = $VERSION:r ; cd ..
+
+
+# Suggested by J. Carter at NERSC.  It eliminates the confusion 
+# between the MPI I/O routines and the multigrid that would 
+# otherwise lead to a slowdown.
+export MP_CSS_INTERRUPT=OFF
+
+# Suggested by NERSC.  Eliminates a potential problem with the 
+# Fortran routine random_number.
+  export XLFRTEOPTS="intrinthds=16"
+
+# Suggested by Jonathan Carter.  Can vary between 1000 and 400000; the larger
+# is the default but smaller is better for small messages.  Has a small ---
+# one percent --- effect on the code.
+# export MP_ACK_INTERVAL 40000
+
+# Unalias commands like rm, cp, mv used in this script so that they
+# are not asked for a prompt to destroy files
+
+  unalias rm #; unalias cp ; unalias mv
+
+
+############ Initialize RUN ####################
+ 
+ if [ "$1" = "init" ]; then
+ 
+ echo $0
+
+    ########## Make a scratch directory. Checks to make sure that
+    ########## a scratch directoy does not already exist.
+    export NUM=1
+    export WORKDIR=$SCRATCH/$PROJ'run'$RN.$NUM
+ 
+    while [ ! $FIN ]; do 
+       if [ -e $WORKDIR ]; then 
+          export NUM=$[ $NUM + 1 ]
+          export WORKDIR=$SCRATCH/$PROJ'run'$RN.$NUM	 
+       else
+          export FIN='OKIEDOKIE!!'
+       fi
+    done
+ 
+    echo $WORKDIR > $DR/pwd.$RN
+    mkdir $WORKDIR
+ 
+ 
+ #  ########## Update tar file so it contains most recent files
+ 
+    cd $DR
+    cp makefile param_$PAR ${PROGNAME}-hybrid.run code/.
+ 
+ #  ########## Copy files into scratch directory and compile
+ 
+    cd $WORKDIR ; mkdir compile
+    cp $DR/* . ; cp $DR/code/* compile/.
+  
+    #*/###########################################
+    cd compile # Change to compile directory
+ 
+    # cp param file to simply "param" so cpp will include it. 
+    cp param_$PAR param
+ 
+    # Untar program files
+ #  tar -xvf ${VERSION}.tar
+ 
+    # Figure out what kind of machine I'm running on. Right now, this 
+    # script is only set up to run on the IBM. 
+    if [ "`uname -s`" = "AIX" ]; then export MACH='AIX'
+    elif [ "`uname -s`" = "Linux" ]; then export MACH='Linux'
+    fi
+ 
+    # Determine which initialization routine is being used. 
+    export INITFILE=`awk '/^#define/ && / init_scheme / {print $3}' param`
+ 
+ set -x
+    # Make init program which outputs initial dump file. 
+    make par=$PAR mach=$MACH initfile=$INITFILE init-hybrid
+ 
+    # Make p3d
+    make par=$PAR mach=$MACH initfile=$INITFILE p3d-hybrid
+    
+    cd $WORKDIR
+    cp compile/init-hybrid compile/p3d-hybrid . # copy executables from compile dir.
+ 
+    ########## If necessary, download dumpfiles.
+ 
+    if [ $DMPDIR ]; then     # Only get dump file if DMPDIR is defined
+ 
+       hsi "cd $DMPDIR ; get $DMPFILES"
+    fi  
+ 
+    exit 0
+ 
+ fi
+ 
+ ##########  End of initialization ####################
+
+#############################################################
+###########  Begin Run  #####################################
+ 
+ if [ "$1" = "" ]; then
+ 
+ set -x
+ echo $0
+    cd $DR
+    export WORKDIR=`cat pwd.$RN`
+    cd $WORKDIR
+ 
+    echo "#################### RUNNING  PROGRAM ####################"
+ 
+    # Only run init to create an initial dump file if the run is not a
+    # restart. If the run is a restart, currently you must copy the
+    # restart dump files by hand and rename them to $FILENO. 
+    if [ "$RESTART" = "0" ]; then 
+     /usr/bin/time -p aprun -n $PROCS -N $TASKS_PER_NODE ./init-hybrid
+     echo "####################### CREATED THE INITIAL FILES ######################"
+    fi
+     /usr/bin/time -p aprun -n $PROCS -N $TASKS_PER_NODE ./p3d-hybrid $FILENO $NSTEPS >> p3d.stdout
+ 
+    echo "#################### FINISHED PROGRAM ####################"
+ 
+    /bin/cp p3d.stdout $DR/p3d.stdout.$RN
+ 
+    # Rename movie files so that they are compatible with Shay's idl codes. 
+    /bin/cp param_${PAR} movie.param_${RN}.in
+    for movvar in bx by bz jix jiy jiz ex ey ez jx jy jz rho ni ne log jex jey jez \
+            jix jiy jiz pe pi n pixx piyy pizz pexx peyy pezz pxx pyy pzz pxy pxz pyz \
+            logdist disti diste n pe jtotx jtoty jtotz
+      do
+      if [ -e $movvar ]; then
+         mv -f $movvar movie.${movvar}_${RN}.in
+      fi
+      done
+    
+    exit 0
+ 
+ fi
+ 
+#############################################################
+###########  Finish up run: Save files to Archive ###########
+#
+#if [ $1 == 'fin' ]; then
+#
+#   cd $DR
+#   export WORKDIR=`cat pwd.$RN`
+#   cd $WORKDIR
+#
+#   hsi "cd p3d ; mkdir $SVDIR ; cd $SVDIR ; mkdir dumpfiles"
+#
+#   set nonomatch
+#   for fl in $(ls *.in)
+#   do
+#      echo "COMPRESSING $fl"
+#      compress -c -f $fl > $fl.Z
+#      echo "COMPRESSED $fl"
+#   end
+#
+#   export lst=`ls p3d-001*` ; export ext=($lst:ge) # Wordlist of dump extension numbers
+#   shift ext # Get rid of lowest dumpfile number. Is an init or restart number.
+#
+#   for num in $(ext)  # Save dumpfiles to dumpfile directory.
+#   do
+#     hsi "cd p3d/${SVDIR}/dumpfiles ; put p3d-???.${num}"
+#   end
+#
+#   unset nonomatch
+#
+#   hsi "cd p3d/$SVDIR ; put *.in.Z makefile *.run *.stdout p3d*.tar param*"
+#
+#   cd $DR
+##   /bin/rm -fr $WORKDIR
+#
+#   exit
+#   
+#   exit 0
+#
+#fi  

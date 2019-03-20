@@ -1,0 +1,112 @@
+! 6/25/2006 - M. Shay: Initial run: rn470.p81F, Precursor: param_waveG
+!             This param file was set up to model an Alfven wave and the 
+!             electron acceleration that may happen in that case. 
+! Precision of Real Numbers
+! default:
+#define drk 8
+! Particles:
+#define prk 4
+
+! box dimensions
+! processors in each space directions
+#define pex 16
+#define pey 1
+#define pez 1
+! grid points per processor (power of two in each direction highly recommended)
+! nz must be power of two, nx and should be powers of two for multigrid
+! if nz=1 set pez=1 (2D case)
+#define nx 16
+#define ny 2
+#define nz 1
+! box dimensions
+#define lx 25.6
+#define ly 0.2
+#define lz 1.
+
+
+! physical and numerical parameters
+#define c_2 625
+#define m_e 0.01
+#define dt 0.004
+#define substeps 5
+#define boundary_condition periodic
+#define diagout 0.1
+#define subtract_average_rho
+!#define relativistic
+
+! movie diagnostics
+#define movie_header "movie2dd.h" 
+!#define double_byte
+#define movieout 0.008
+
+! other definitions
+#define head 'p3d'
+#define bufsize 5000
+#define maxparticles 4000000
+#define nchannels 16
+#define maxruntime 5000
+
+! initialization
+#define init_scheme initalfvenA
+#define ppg 1000
+#define T_e 1.0
+#define T_i 0.05
+#define bpert 0.2
+#define n_0 1.0
+#define npert 0.2
+#define gamma_sounde 1.0
+#define gamma_soundi 3.0
+!#define alt_initial_current
+!#define smooth_sheet
+#define b0 0.
+!#define n_frac 0.
+#define v_waveadd -1.0
+
+! Output distribution functions
+#define outputdist   
+!   Define "outputdist" to output distribution functions.
+!   Also, you must choose an output movie header file which can
+!   output the distribution functions. 
+!   (currently movie2dd.h is the only one).
+!
+! Velocity space dimensions for distribution function output
+#define nvxi 101
+#define nvxe 101
+#define vxmaxi 2.0
+#define vxmaxe 40.
+! nvx = number of grid points in velocity space
+! vxmax = maximum velocity binned. Note that bins will run from 
+!         -vxmax to vxmax.
+! dvx=2*vxmax/(nvx-1)  
+! if you want v=0 to be at a specific grid point in velocity space,
+!    make sure to set nvx to be odd.
+
+! multigrid parameters
+#define nu1 4
+#define nu2 4
+#define nu3 200
+#define maxiter 1000
+#define eps 1e-10
+#define norm_res
+#define mgverbose
+!#define mgverbose2
+#define alt_restrict_prolong
+#define skip_poisson 1
+#define coarsegrid_sor
+#define miniter 4
+#define JACOBI
+!#define GS_RB
+!#define WCYCLE
+
+! domain for post processing
+#define pexv 1
+#define peyv 1
+#define pezv 1
+#define nxv 256
+#define nyv 256
+#define nzv 1
+
+
+
+
+

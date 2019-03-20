@@ -1,0 +1,114 @@
+#******************************************************************************
+#                  3D particle code: makefile for IBM SP
+#                           Andreas Zeiler, 1999
+#
+#                        LATEST CHANGE: June 11, 2003
+#
+#******************************************************************************
+
+OPTIMIZE    = -qarch=pwr3 -qtune=pwr3 -qunroll -bmaxdata:0x60000000
+CF90FLAGS   = -qfree=f90 $(OPTIMIZE) -qsuppress=1511-013:1500-036
+CF          = mpxlf90_r $(CF90FLAGS) -O3
+SER_F       = xlf90
+
+# -bmaxdata:0x40000000
+# for profiling: -g -pg
+
+# New init files do not need to be added here unless they are like, e.g., 
+# initharrisall where the variable in init_scheme does not match the file 
+# name *.F90.  If that's the case either get fancier coding or add the new
+# one by hand to one of the next four lines.
+
+# M. Shay: 6/16/2005
+# initschemes initperturb and initperturb2 require initperturball.o.
+# The if statements take care of those possibilities. 
+
+ifeq (${initfile},initperturb)
+  override initfile=initperturball
+endif
+ifeq (${initfile},initperturb2)
+  override initfile=initperturball
+endif
+
+OBJS_INIT_BASE = modules.o inout.o misc.o boundary.o initmisc.o ${initfile}.o 
+OBJS_INIT_FLUID = $(OBJS_INIT_BASE) init-twofluid.o initharris-f.o
+OBJS_INIT_HYB = $(OBJS_INIT_BASE) particles.o init-hybrid.o initOTV-h.o 
+OBJS_INIT_PART = $(OBJS_INIT_BASE) particles.o maxwell.o initharrisall.o initgemall.o initelectronall.o initperturball.o init.o
+
+OBJS_BASE = modules.o inout.o multigrid.o movie.o misc.o boundary.o
+OBJS_FLUID = $(OBJS_BASE) twofluid.o p3d-twofluid.o
+OBJS_HYB = $(OBJS_BASE) particles.o hybrid.o hybrid-misc.o p3d-hybrid.o
+OBJS_PART = $(OBJS_BASE) particles.o maxwell.o p3d.o distfct.o moviedist.o
+
+# Blank suffixes line insures the .f files are not treated as source
+.SUFFIXES:
+.SUFFIXES:	.o .M .F90
+
+.F90.o:	;cpp -D$(mach) < $< | grep -v '^#' > ${*F}.f
+		$(CF) $(CF90FLAGS) -c ${*F}.f
+
+.M.o: 	;m4 -B 16384 $< | cpp -D$(mach) | grep -v '^#' > ${*F}.f
+		$(CF) $(CF90FLAGS) -c ${*F}.f
+
+init: $(OBJS_INIT_PART)
+	$(CF) $(CF90FLAGS) -o $@ $(OBJS_INIT_PART)
+	make consistency_check
+
+init-hybrid: $(OBJS_INIT_HYB)
+	$(CF) $(CF90FLAGS) -o $@ $(OBJS_INIT_HYB)
+	make consistency_check
+
+init-twofluid: $(OBJS_INIT_FLUID)
+	$(CF) $(CF90FLAGS) -o $@ $(OBJS_INIT_FLUID)
+	make consistency_check
+
+consistency_check: consistency_check.o
+	$(SER_F) $(CF90FLAGS) -o $@ consistency_check.o
+	./$@
+
+vdist: vdist.o
+	$(SER_F) $(CF90FLAGS) -o $@ vdist.o
+vdist2d: vdist2d.o
+	$(SER_F) $(CF90FLAGS) -o $@ vdist2d.o
+vdist3d: vdist3d.o
+	$(SER_F) $(CF90FLAGS) -o $@ vdist3d.o
+
+ener: ener.o
+	$(SER_F) $(CF90FLAGS) -o $@ ener.o
+
+volume: volume.o
+	$(SER_F) $(CF90FLAGS) -o $@ volume.o
+
+
+vdist_par: modules.o vdist_par.o
+	$(CF) $(CF90FLAGS) -o $@ modules.o vdist_par.o
+temperature : modules.o temperature.o
+	$(CF) $(CF90FLAGS) -o $@ modules.o temperature.o
+
+
+p3d: $(OBJS_PART) 
+	$(CF) $(CF90FLAGS) -o $@ $(OBJS_PART)
+
+p3d-hybrid: $(OBJS_HYB)
+	$(CF) $(CF90FLAGS) -o $@ $(OBJS_HYB)
+
+p3d-twofluid: $(OBJS_FLUID)
+	$(CF) $(CF90FLAGS) -o $@ $(OBJS_FLUID)
+eqnfree: $(OBJS_PART) 
+	$(CF) $(CF90FLAGS) -o $@ $(OBJS_PART)
+
+
+
+# Everything depends on param_*, so recompile all files if it changes
+$(OBJS_PART) $(OBJS_HYB) $(OBJS_FLUID) $(OBJS_INIT_FLUID) $(OBJS_INIT_HYB) $(OBJS_INIT_PART) consistency_check.o temperature.o vdist.o vdist2d.o vdist3d.o vdist_par.o volume.o ener.o: param_$(par)
+
+# The main routines also depend on the movie header file.
+p3d.o p3d-hybrid.o p3d-twofluid.o: $(movieheader)
+
+
+
+
+
+
+
+

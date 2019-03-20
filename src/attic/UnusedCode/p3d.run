@@ -1,0 +1,230 @@
+#!/bin/csh
+
+# When called as a batch script, these options are used.
+#@ shell = /usr/bin/csh
+#@ job_type = parallel
+#@ class = debug
+	# Which queue: debug, regular, premium
+#@ network.MPI = csss,not_shared,us 	
+	# Specifies communication protocol and adapters.  Do not change
+#@ environment = $HOME
+	# Valid shell environment variables
+#@ node = 1
+#@ tasks_per_node = 16
+#@ wall_clock_limit = 25:00
+	# Max is 8 hrs for regular, 30 min for debug
+#@ notification = always
+	# Send e-mail: always, complete, error, never, start
+#@ job_name = run421
+#@ output = log421.$(host).$(jobid)
+#@ error =  log421.$(host).$(jobid)
+#@ queue
+	# Must be final keyword
+
+set echo
+
+set DR = $HOME/run3
+set RN = 421
+set PAR = waveG   # paramfile = param_$PAR
+set SVDIR = 'rn421.p65F'
+set NODES = 1
+set NSTEPS = 2000
+set NRUNS = 0  # How many time reloop NSTEPS. 
+               # To run only once, set NRUNS = 0
+
+#set RESTART    # Comment this out to start from scratch.
+               # If you restart, you currently have to copy the 
+               # dumpfiles by hand.
+
+
+set FILENO = 0  # Dump file number to start code with
+set TASKS_PER_NODE = 16
+
+#set DMPDIR = 'rn421.p37E/dumpfiles'
+#set DMPFILES = 'pfdmp_1_421.d*'
+
+set PROGNAME = 'p3d'
+
+########## END OF USER MODIFIED VARIABLES  ####################
+###############################################################
+
+##########  Various initial things #####################
+
+set DR = ${DR}/run${RN}
+
+# Set VERSION equal efree<version num> using the tar file. 
+cd $DR ; set VERSION = ${PROGNAME}??.tar ; set VERSION = $VERSION:r ; cd ..
+
+
+# Suggested by J. Carter at NERSC.  It eliminates the confusion 
+# between the MPI I/O routines and the multigrid that would 
+# otherwise lead to a slowdown.
+setenv MP_CSS_INTERRUPT OFF
+
+# Suggested by NERSC.  Eliminates a potential problem with the 
+# Fortran routine random_number.
+ setenv XLFRTEOPTS "intrinthds=16"
+
+# Suggested by Jonathan Carter.  Can vary between 1000 and 400000; the larger
+# is the default but smaller is better for small messages.  Has a small ---
+# one percent --- effect on the code.
+# setenv MP_ACK_INTERVAL 40000
+
+# Unalias commands like rm, cp, mv used in this script so that they
+# are not asked for a prompt to destroy files
+
+unalias rm ; unalias cp ; unalias mv
+
+
+########### Initialize RUN ####################
+
+if ($1 == 'init') then
+
+echo $0
+
+   ########## Make a scratch directory. Checks to make sure that
+   ########## a scratch directoy does not already exist.
+   unset echo
+   @ NUM = 1
+   set WORKDIR = $SCRATCH'/run'$RN.$NUM
+
+   while (! $?FIN )
+      if (-e $WORKDIR) then 
+         @ NUM++
+         set WORKDIR = $SCRATCH'/run'$RN.$NUM	 
+      else
+         set FIN
+      endif
+   end
+
+   set echo
+   echo $WORKDIR > $DR/pwd.$RN
+   mkdir $WORKDIR
+
+
+   ########## Update tar file so it contains most recent files
+
+   cd $DR ; mkdir temp.$$
+   cd temp.$$ ; tar -xvf ../${VERSION}.tar ; cd ..
+   cp makefile param_$PAR ${PROGNAME}.run temp.$$/.
+   cd temp.$$ ; tar -cvf ../${VERSION}.tar * ; cd ..
+   rm -fr temp.$$
+
+   ########## Copy files into scratch directory and compile
+
+   cd $WORKDIR ; mkdir compile
+   cp $DR/* . ; cp $DR/* compile/.
+ 
+   cd compile # Change to compile directory
+
+   # cp param file to simply "param" so cpp will include it. 
+   cp param_$PAR param
+
+   # Untar program files
+   tar -xvf ${VERSION}.tar
+
+   # Figure out what kind of machine I'm running on. Right now, this 
+   # script is only set up to run on the IBM. 
+   if ("`uname -s`" == 'AIX' ) set MACH = 'AIX'
+
+   # Determine which initialization routine is being used. 
+   set INITFILE = `awk '/^#define/ && / init_scheme / {print $3}' param`
+
+   # Make init program which outputs initial dump file. 
+   make par=$PAR mach=$MACH initfile=$INITFILE init
+
+   # Make p3d
+   make par=$PAR mach=$MACH initfile=$INITFILE p3d
+   
+   cd $WORKDIR
+   cp compile/init compile/p3d . # copy executables from compile dir.
+
+   ########## If necessary, download dumpfiles.
+
+   if ($?DMPDIR) then     # Only get dump file if DMPDIR is defined
+
+      hsi "cd $DMPDIR ; get $DMPFILES"
+   endif  
+
+   exit 0
+
+endif
+
+##########  End of initialization ####################
+
+############################################################
+##########  Begin Run  #####################################
+
+if ( $1 == '') then
+
+echo $0
+   cd $DR
+   set WORKDIR = `cat pwd.$RN`
+   cd $WORKDIR
+
+   echo '#################### RUNNING  PROGRAM ####################'
+
+   # Only run init to create an initial dump file if the run is not a
+   # restart. If the run is a restart, currently you must copy the
+   # restart dump files by hand and rename them to $FILENO. 
+   if ($?RESTART == '0') then 
+     timex poe+ init -nodes $NODES -tasks_per_node $TASKS_PER_NODE 
+   endif
+   timex poe+ p3d -nodes $NODES -tasks_per_node $TASKS_PER_NODE $FILENO $NSTEPS > p3d.stdout
+
+   echo '#################### FINISHED PROGRAM ####################'
+
+   /bin/cp p3d.stdout $DR/p3d.stdout.$RN
+
+   # Rename movie files so that they are compatible with Shay's idl codes. 
+   /bin/cp param_${PAR} movie.param_${RN}.in
+   foreach movvar (bx by bz ex ey ez jx jy jz rho ni ne log jex jey jez \
+           jix jiy jiz pe pi n pixx piyy pizz pexx peyy pezz \
+           logdist disti diste)
+     if (-e $movvar) then
+        mv -f $movvar movie.${movvar}_${RN}.in
+     endif
+   end
+
+endif
+
+############################################################
+##########  Finish up run: Save files to Archive ###########
+
+if ($1 == 'fin') then
+
+   cd $DR
+   set WORKDIR = `cat pwd.$RN`
+   cd $WORKDIR
+
+   hsi "cd p3d ; mkdir $SVDIR ; cd $SVDIR ; mkdir dumpfiles"
+
+   set nonomatch
+   foreach fl (*.in)
+      echo "COMPRESSING $fl"
+      compress -c -f $fl > $fl.Z
+      echo "COMPRESSED $fl"
+   end
+
+   set lst = `ls p3d-001*` ; set ext = ($lst:ge) # Wordlist of dump extension numbers
+   shift ext # Get rid of lowest dumpfile number. Is an init or restart number.
+
+   foreach num ($ext)  # Save dumpfiles to dumpfile directory.
+     hsi "cd p3d/${SVDIR}/dumpfiles ; put p3d-???.${num}"
+   end
+
+   unset nonomatch
+
+   hsi "cd p3d/$SVDIR ; put *.in.Z makefile *.run *.stdout p3d*.tar param*"
+
+   cd $DR
+#   /bin/rm -fr $WORKDIR
+
+   exit
+
+endif  
+
+
+
+
+

@@ -1,0 +1,110 @@
+! choose hybrid mode
+#define hybrid
+
+! Precision of Real Numbers
+! default:
+#define drk 8
+! Particles:
+#define prk 4
+
+! box dimensions
+! processors in each space directions
+#define pex 16 
+#define pey 1 
+#define pez 1
+! grid points per processor (power of two in each direction highly recommended)
+! nz must be power of two, nx and should be powers of two for multigrid
+! if nz=1 set pez=1 (2D case)
+#define nx 8
+#define ny 1  
+#define nz 1  
+! box dimensions -- Make sure to have these as real numbers for me=0. runs
+#define lx 3.2    
+#define ly 1e4       
+#define lz 1e4  
+
+! physical and numerical parameters
+!#define ELM
+#define d_e2 0.00
+#define gam 5./3
+#define dt 0.01
+#define substeps 4
+#define boundary_condition periodic
+#define diagout 1.0 
+#define nu 5.0e-8
+#define chi 0.005
+#define n_base 0. 
+#define b0x 0.01743
+#define b0y 0.99985 
+#define b0z 0.0    
+
+! movie diagnostics
+#define movie_header "movie4b.h" 
+#define movie_header_full "movie4bfull.h" 
+#define movieout 4.99999
+#define movieout_full 0.0499999 
+!#define dispout 9.99999
+#define USE_SIMPLE_IO
+#define double_precision
+#define take_dump 10000
+!#define double_byte
+
+! other definitions
+#define head 'p3d'
+#define bufsize 5000
+#define maxparticles 50000000 
+#define nchannels pex*pey*pez
+#define maxruntime 39999
+
+! initialization
+#define init_scheme initalfven-h
+! Number of wave modes in the box - For Alfven wave
+#define nummodes 10
+#define waveamp 0.1
+#define ppg 1000
+#define T_e 0.05
+!#define isothermal
+!#define NO_ELEC_PHYS
+#define T_i 0.005
+#define w0 0.5
+#define psi0 0.0
+#define n_0 1.0
+
+! multigrid parameters
+#define nu1 4
+#define nu2 4
+#define nu3 4 
+#define maxiter 1000
+#define eps 1e-5
+#define norm_res
+#define mgverbose
+!#define mgverbose2
+#define alt_restrict_prolong
+#define miniter 3
+#define fixiter 2
+#define GS_LEX
+!#define WCYCLE
+! incompressibility condition for electrons
+!#define incompressible_electrons
+! domain for post processing
+#define pexv 1
+#define peyv 1
+#define pezv 1
+#define nxv 512
+#define nyv 512
+#define nzv 1
+
+! Driving flags
+!#define DRIVE_B
+!#define alpha_drb 0.05
+!#define FOUROMEGA 0.00 
+!#define DRIVE_V
+!#define alpha_drv 1.0
+
+!EXPANSION Flags
+!#define EXPANSION
+!#define ACCELERATED_EXPANSION
+!uncomment the following parameters if 
+!not accelerating box
+!#define uu0 0.001
+!#define usw0 1000

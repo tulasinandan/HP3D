@@ -1,0 +1,13 @@
+*CHANGES TO BE MADE
+
+** Change the definitions of the derivatives
+** Modify the particle update equations
+** Modify the particle acceleration equation
+** Modify the electric field equation (maybe ...)
+** Update the magnetic field equation
+** Update the electron pressure equation
+
+* CHECKS TO BE MADE
+
+** Long runs with me=0
+** Check/force div.B=0

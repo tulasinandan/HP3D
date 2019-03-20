@@ -1,0 +1,92 @@
+! choose hybrid mode
+#define hybrid
+
+! Precision of Real Numbers
+! default:
+#define drk 8
+! Particles:
+#define prk 4
+
+! box dimensions
+! processors in each space directions
+#define pex 2 
+#define pey 2 
+#define pez 1
+! grid points per processor (power of two in each direction highly recommended)
+! nz must be power of two, nx and should be powers of two for multigrid
+! if nz=1 set pez=1 (2D case)
+#define nx 128
+#define ny 128
+#define nz 1
+! box dimensions
+#define lx 12.8  
+#define ly 12.8   
+#define lz 1e4
+
+! physical and numerical parameters
+#define d_e2 0.04
+#define gam 5./3
+#define dt 0.005
+#define substeps 1
+#define boundary_condition periodic
+#define diagout 1.0 
+#define D_b  3e-5
+#define D_pe 3e-5
+! change the default of 1e-1 to 0
+#define n_base 0. 
+#define b0 3.5
+
+! movie diagnostics
+!#define movie_header "movie2dhybrid.h" 
+!#define movie_header_full "movie2dhybridfull.h" 
+#define movie_header "movie4b.h" 
+#define movie_header_full "movie4bfull.h" 
+#define movieout 4.99999
+#define movieout_full 0.024999
+#define USE_SIMPLE_IO
+!#define double_byte
+!! following definition for the double precision data output
+#define double_precision
+
+! other definitions
+#define head 'p3d'
+#define bufsize 5000
+!#define maxparticles 1600000
+#define maxparticles 10000000
+#define nchannels 16
+#define maxruntime 5000
+
+! initialization
+#define init_scheme initdebug
+#define ppg 100
+#define T_e 4.0 
+#define T_i 4.0
+#define w0 0.5
+#define psi0 0.0
+#define n_0 1.0
+
+! multigrid parameters
+#define nu1 4
+#define nu2 4
+#define nu3 4 
+#define maxiter 1000
+#define eps 1e-5
+#define norm_res
+#define mgverbose
+!#define mgverbose2
+#define alt_restrict_prolong
+#define miniter 3
+#define fixiter 2
+#define GS_LEX
+!#define WCYCLE
+! setting no update for ions
+!#define NO_IONS_HYBRID
+! incompressibility condition for electrons
+#define incompressible_electrons
+! domain for post processing
+#define pexv 1
+#define peyv 1
+#define pezv 1
+#define nxv 512
+#define nyv 512
+#define nzv 1
